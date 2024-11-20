@@ -42,6 +42,7 @@ import Formellt from "./index.js"
 const handler = new Formellt("#signup-form", {  // only validator and onSubmit are required in this init object
     sanitizer(formData) {
         formData.username = formData.username.trim().replaceAll(/\s+/gm, " ")
+        return formData
     },
 
     //        ↓ formData if no sanitizer is provided 
