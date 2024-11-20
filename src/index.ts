@@ -1,18 +1,23 @@
 type FormelltSelector = HTMLFormElement | string;
 type FormelltError = { msg: string, data?: any };
-type FormelltSubmitHandler<FD> = (e: SubmitEvent, formData: FD) => ((Response | void) | Promise<Response | void>);
 type FormelltErrorDispatcher<FD> = (name: keyof FD, msg: string) => void;
-type FormelltValidator<FD> = (fd: FD, dispatchError: FormelltErrorDispatcher<FD>) => void;
+type FormelltSanitizer<FD, S> = (fd: FD) => S;
+type FormelltValidator<FD, S> = (s: S, dispatchError: FormelltErrorDispatcher<FD>) => void;
+type FormelltSubmitHandler<FD, S> = (e: SubmitEvent, formData: FD, sanitized: S) => ((Response | void) | Promise<Response | void>);
 type FormelltResponseHandler<Data> = (res: Response, json?: Data) => (undefined | string);
-type FormelltInit<FD, Data = any> = {
-    onSubmit: FormelltSubmitHandler<FD>
-    validator: FormelltValidator<FD>
+type FormelltInit<FD, S = FD, Data = any> = {
+    onSubmit: FormelltSubmitHandler<FD, S>
+    validator: FormelltValidator<FD, S>
     // optional
-    observerCallback?: MutationCallback
+    sanitizer?: FormelltSanitizer<FD, S>
+    validateOnChange?: boolean
+    validateOnMount?: boolean
+    validateOnMutate?: boolean
+    mutationCallback?: MutationCallback
     allowInvalid?: boolean
     submitErrorMsg?: string
     preventSpam?: boolean
-    spamMsg?: string
+    spamErrorMsg?: string
     onGoodRes?: FormelltResponseHandler<Data>
     onBadRes?: FormelltResponseHandler<Data>
 }
@@ -24,7 +29,7 @@ type FormelltInput = (
 )
 
 
-class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
+class Formellt<FormDataSchema extends Record<string, any>, Sanitized = FormDataSchema, Data = any> {
     // Static
 
     static err(msg: string, data?: any): FormelltError {
@@ -51,13 +56,16 @@ class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
 
     form: HTMLFormElement
     observer: MutationObserver
-    onSubmit: FormelltSubmitHandler<FormDataSchema>
-    validator: FormelltValidator<FormDataSchema>
+    validator: FormelltValidator<FormDataSchema, Sanitized>
+    sanitizer: FormelltSanitizer<FormDataSchema, Sanitized> = (fd) => fd as unknown as Sanitized;
+    onSubmit: FormelltSubmitHandler<FormDataSchema, Sanitized>
     allowInvalid: boolean
     submitErrorMsg: string
     errors: Map<keyof FormDataSchema, string> = new Map()
     preventSpam: boolean
-    spamMsg: string
+    spamErrorMsg: string
+    validateOnChange: boolean
+    validateOnMount: boolean
 
     submitting: boolean = false;
     onGoodRes: FormelltResponseHandler<Data>
@@ -90,7 +98,7 @@ class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
     }
 
     get valid(): boolean {
-        return Object.keys(this.errors).length === 0
+        return this.errorNames.length === 0
     }
 
     get submitErrorElement(): HTMLElement | null {
@@ -98,33 +106,65 @@ class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
     }
 
     get spamElement(): HTMLElement | null {
-        return this.querySelector("*[data-spam]")
+        return this.querySelector("*[data-spam-error]")
     }
 
     get responseElement(): HTMLElement | null {
-        return this.querySelector("*[data-response]")
+        return this.querySelector("*[data-response-error]")
+    }
+
+    get errorNames(): string[] {
+        return Object.keys(Object.fromEntries(this.errors))
+    }
+
+    get sanitized(): Sanitized {
+        return this.sanitizer(this.formData)
     }
 
     ///////////////////////////////////////////////////////////
-    constructor(selector: FormelltSelector, init: FormelltInit<FormDataSchema>) {
+    constructor(selector: FormelltSelector, init: FormelltInit<FormDataSchema, Sanitized>) {
         this.form = Formellt.getForm(selector)
-        this.onSubmit = init.onSubmit
+        if (init.sanitizer) this.sanitizer = init.sanitizer
         this.validator = init.validator
+        this.onSubmit = init.onSubmit
         this.allowInvalid = init.allowInvalid === true;
         this.submitErrorMsg = init.submitErrorMsg || "Fix errors.";
-        this.form.addEventListener("submit", this.onSubmit.bind(this))
         this.preventSpam = init.preventSpam === true;
-        this.spamMsg = init.spamMsg || "Please wait.";
+        this.spamErrorMsg = init.spamErrorMsg || "Please wait.";
         this.onGoodRes = init.onGoodRes || (() => {}) as FormelltResponseHandler<Data>
         this.onBadRes = init.onBadRes || (() => {}) as FormelltResponseHandler<Data>
-        
-        if (init.observerCallback) {
-            this.observer = new MutationObserver(init.observerCallback)
-            this.observer.observe(this.form, {
-                subtree: true,
-                childList: true
+        this.validateOnChange = init.validateOnChange || false
+        this.validateOnMount = init.validateOnMount || false
+
+        // handle submit
+        this.form.addEventListener("submit", e => {
+            e.preventDefault()
+            this.submit(e)
+        })
+
+        // handle change or input
+        if (this.validateOnChange) {
+            this.form.addEventListener("change", () => {
+                this.validate()
             })
         }
+
+        // handle start
+        if (this.validateOnMount) this.validate()
+
+        // handle mutate
+        this.observer = new MutationObserver((records) => {
+            if (init.mutationCallback) init.mutationCallback(records, this.observer);
+            if (init.validateOnMutate) {
+                if (records.some(r => r.type === "childList")) this.validate()
+            }
+            // this.validate()
+        })
+        this.observer.observe(this.form, {
+            subtree: true,
+            childList: true
+        })
+        
     } ///////////////////////////////////////////////////////
 
     // Public methods
@@ -167,15 +207,12 @@ class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
         }
         this.submitting = true
 
-        this.resetErrors()
-        this.validator(this.formData, this.dispatchError.bind(this))
-        if (!this.allowInvalid && !this.valid) {
-            this.displayErrors()
-            this.displaySubmitError()
-            return
-        }
+        this.validate()
+
+        if (!this.allowInvalid && !this.valid) return;
         
-        const res = await this.onSubmit(e, this.formData)
+        const res = await this.onSubmit(e, this.formData, this.sanitized)
+
         if (res) {
             let resMsg: undefined | string;
             if (res.ok) {
@@ -202,7 +239,7 @@ class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
     }
 
     displayErrors() {
-        Object.keys(this.errors).forEach(name => {
+        this.errorNames.forEach(name => {
             const errorEl = this.getErrorElement(name);
             if (!errorEl) return;
             errorEl.innerHTML = this.errors.get(name) || "";
@@ -218,7 +255,7 @@ class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
     }
 
     displaySpamMessage() {
-        if (this.preventSpam && this.spamElement) this.spamElement.innerHTML = this.spamMsg;
+        if (this.preventSpam && this.spamElement) this.spamElement.innerHTML = this.spamErrorMsg;
     }
 
     resetSpamMessage() {
@@ -241,4 +278,16 @@ class Formellt<FormDataSchema extends Record<string, any>, Data = any> {
             return
         }
     }
+
+    validate() {
+        this.resetErrors()
+        this.validator(this.sanitized, this.dispatchError.bind(this))
+        if (!this.allowInvalid && !this.valid) {
+            this.displayErrors()
+            this.displaySubmitError()
+            return
+        }
+    }
 }
+
+export default Formellt

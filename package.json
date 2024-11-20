@@ -1,0 +1,30 @@
+{
+  "name": "formellt",
+  "version": "0.0.1",
+  "description": "Vanilla JS form handle library",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "pnpx tsx --watch src/index.ts",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dugalcedo/formellt.git"
+  },
+  "keywords": [
+    "forms",
+    "form",
+    "\"form",
+    "handling\"",
+    "\"form",
+    "handle\"",
+    "javascript"
+  ],
+  "author": "Dug Alcedo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dugalcedo/formellt/issues"
+  },
+  "homepage": "https://github.com/dugalcedo/formellt#readme"
+}
