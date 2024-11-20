@@ -1,11 +1,11 @@
-type FormelltSelector = HTMLFormElement | string;
-type FormelltError = { msg: string, data?: any };
-type FormelltErrorDispatcher<FD> = (name: keyof FD, msg: string) => void;
-type FormelltSanitizer<FD, S> = (fd: FD) => S;
-type FormelltValidator<FD, S> = (s: S, dispatchError: FormelltErrorDispatcher<FD>) => void;
-type FormelltSubmitHandler<FD, S> = (e: SubmitEvent, formData: FD, sanitized: S) => ((Response | void) | Promise<Response | void>);
-type FormelltResponseHandler<Data> = (res: Response, json?: Data) => (undefined | string);
-type FormelltInit<FD, S = FD, Data = any> = {
+export type FormelltSelector = HTMLFormElement | string;
+export type FormelltError = { msg: string, data?: any };
+export type FormelltErrorDispatcher<FD> = (name: keyof FD, msg: string) => void;
+export type FormelltSanitizer<FD, S> = (fd: FD) => S;
+export type FormelltValidator<FD, S> = (s: S, dispatchError: FormelltErrorDispatcher<FD>) => void;
+export type FormelltSubmitHandler<FD, S> = (e: SubmitEvent, formData: FD, sanitized: S) => ((Response | void) | Promise<Response | void>);
+export type FormelltResponseHandler<Data> = (res: Response, json?: Data) => (undefined | string);
+export type FormelltInit<FD, S = FD, Data = any> = {
     onSubmit: FormelltSubmitHandler<FD, S>
     validator: FormelltValidator<FD, S>
     // optional
@@ -22,7 +22,7 @@ type FormelltInit<FD, S = FD, Data = any> = {
     onBadRes?: FormelltResponseHandler<Data>
 }
 
-type FormelltInput = (
+export type FormelltInput = (
     | HTMLInputElement
     | HTMLTextAreaElement
     | HTMLSelectElement
