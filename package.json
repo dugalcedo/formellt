@@ -1,6 +1,6 @@
 {
   "name": "formellt",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Vanilla JS form handle library",
   "main": "dist/index.js",
   "scripts": {

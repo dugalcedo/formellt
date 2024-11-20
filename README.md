@@ -2,6 +2,10 @@
 
 A class for handling forms. Easily sanitize, validate, and display errors.
 
+## Installation
+
+`npm i formellt`
+
 ## Usage
 
 ### HTML
