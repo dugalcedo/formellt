@@ -209,7 +209,11 @@ class Formellt<FormDataSchema extends Record<string, any>, Sanitized = FormDataS
 
         this.validate()
 
-        if (!this.allowInvalid && !this.valid) return;
+        if (!this.allowInvalid && !this.valid) {
+            // spam guard, UNLOCK
+            this.submitting = false
+            return
+        };
         
         const res = await this.onSubmit(e, this.formData, this.sanitized)
 

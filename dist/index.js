@@ -148,8 +148,12 @@ class Formellt {
         }
         this.submitting = true;
         this.validate();
-        if (!this.allowInvalid && !this.valid)
+        if (!this.allowInvalid && !this.valid) {
+            // spam guard, UNLOCK
+            this.submitting = false;
             return;
+        }
+        ;
         const res = await this.onSubmit(e, this.formData, this.sanitized);
         if (res) {
             let resMsg;
